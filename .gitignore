@@ -1,0 +1,15 @@
+build/
+guest/out/
+.DS_Store
+third_party/MoltenVK/
+third_party/spirv-cross-kestrel/
+.cache/
+
+# AI assistant files (never pushed)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+AGENTS.md
+.cursor/
+.cursorrules
+.github/copilot-instructions.md

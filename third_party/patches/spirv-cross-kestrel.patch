@@ -1,0 +1,18 @@
+diff --git a/spirv_msl.cpp b/spirv_msl.cpp
+index c5a9d433..0a5a8511 100644
+--- a/spirv_msl.cpp
++++ b/spirv_msl.cpp
+@@ -14139,9 +14139,10 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
+ 			}
+ 		}
+ 		uint32_t locn = get_member_location(type.self, index);
+-		// Metal will likely complain about missing color attachments, too.
+-		if (locn != k_unknown_location && !(msl_options.enable_frag_output_mask & (1 << locn)))
+-			return "";
++		// Kestrel: keep [[color(n)]] even when location n is masked off. Only elements of a
++		// flattened output array reach here masked (whole masked variables are hidden), and
++		// Metal rejects struct members without an attribute; writes to an unattached color
++		// are ignored.
+ 		if (locn != k_unknown_location && has_member_decoration(type.self, index, DecorationIndex))
+ 			return join(" [[color(", locn, "), index(", get_member_decoration(type.self, index, DecorationIndex),
+ 			            ")]]");

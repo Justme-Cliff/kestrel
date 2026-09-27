@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Kestrel</string>
+  <key>CFBundleDisplayName</key><string>Kestrel</string>
+  <key>CFBundleIdentifier</key><string>dev.kestrel.emulator</string>
+  <key>CFBundleExecutable</key><string>kestrel</string>
+  <key>CFBundleIconFile</key><string>Kestrel</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>@KESTREL_VERSION@</string>
+  <key>CFBundleVersion</key><string>@KESTREL_VERSION@</string>
+  <key>LSMinimumSystemVersion</key><string>15.0</string>
+  <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSMicrophoneUsageDescription</key><string>Android apps and games (like voice chat) can use your microphone while they're recording.</string>
+  <key>KestrelUpdateURL</key><string>@KESTREL_UPDATE_URL@</string>
+  <key>NSHumanReadableCopyright</key><string>Kestrel Android emulator</string>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>Android App</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>com.android.package-archive</string></array>
+      <key>CFBundleTypeExtensions</key><array><string>apk</string></array>
+    </dict>
+  </array>
+  <key>UTImportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key><string>com.android.package-archive</string>
+      <key>UTTypeDescription</key><string>Android App</string>
+      <key>UTTypeConformsTo</key><array><string>public.data</string><string>public.archive</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict><key>public.filename-extension</key><array><string>apk</string></array></dict>
+    </dict>
+  </array>
+</dict>
+</plist>

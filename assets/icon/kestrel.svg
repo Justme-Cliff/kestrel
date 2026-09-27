@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A2F5E"/>
+      <stop offset="1" stop-color="#0C0E1F"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.55" r="0.5">
+      <stop offset="0" stop-color="#FF7A2F" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FF7A2F" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bird" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD35C"/>
+      <stop offset="0.55" stop-color="#FF8A2B"/>
+      <stop offset="1" stop-color="#F0461C"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#glow)"/>
+  <!-- crosshair -->
+  <g fill="none" stroke="#FF9A4D" stroke-opacity="0.45" stroke-width="12" stroke-linecap="round">
+    <circle cx="512" cy="540" r="262"/>
+    <line x1="512" y1="248" x2="512" y2="300"/>
+    <line x1="512" y1="780" x2="512" y2="832"/>
+    <line x1="220" y1="540" x2="272" y2="540"/>
+    <line x1="752" y1="540" x2="804" y2="540"/>
+  </g>
+  <!-- kestrel diving, wings raised -->
+  <path fill="url(#bird)" d="
+    M512 430
+    C530 430 546 446 548 468
+    L556 500
+    C610 440 690 360 812 300
+    C770 360 742 392 716 420
+    C748 414 770 410 790 412
+    C752 446 712 470 672 486
+    C694 488 712 494 726 504
+    C680 528 632 548 590 560
+    C584 600 566 640 546 670
+    L566 736
+    C546 730 528 722 512 712
+    C496 722 478 730 458 736
+    L478 670
+    C458 640 440 600 434 560
+    C392 548 344 528 298 504
+    C312 494 330 488 352 486
+    C312 470 272 446 234 412
+    C254 410 276 414 308 420
+    C282 392 254 360 212 300
+    C334 360 414 440 468 500
+    L476 468
+    C478 446 494 430 512 430 Z"/>
+  <!-- eye -->
+  <path fill="#1A1030" d="M484 462 L507 472 L503 482 L486 476 Z"/>
+  <path fill="#1A1030" d="M540 462 L517 472 L521 482 L538 476 Z"/>
+  <path fill="#B8360F" d="M500 486 L524 486 C524 500 518 512 508 520 C510 508 506 498 500 494 Z"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#shine)"/>
+</svg>

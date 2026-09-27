@@ -1,0 +1,33 @@
+diff --git a/MoltenVK/MoltenVK/GPUObjects/MVKImage.mm b/MoltenVK/MoltenVK/GPUObjects/MVKImage.mm
+index ef8ca60..26f9140 100644
+--- a/MoltenVK/MoltenVK/GPUObjects/MVKImage.mm
++++ b/MoltenVK/MoltenVK/GPUObjects/MVKImage.mm
+@@ -1608,6 +1608,7 @@ static void signalAndUntrack(const MVKSwapchainSignaler& signaler) {
+ id<CAMetalDrawable> MVKPresentableSwapchainImage::getCAMetalDrawable() {
+ 
+ 	if (_mtlTextureHeadless) { return nil; }	// If headless, there is no drawable.
++	if ( !_mtlDrawable && !_swapchain ) { return nil; }	// Kestrel: swapchain already destroyed
+ 
+ 	if ( !_mtlDrawable ) {
+ 		@autoreleasepool {
+@@ -1639,6 +1640,8 @@ static void signalAndUntrack(const MVKSwapchainSignaler& signaler) {
+ // Pass MVKImagePresentInfo by value because it may not exist when the callback runs.
+ VkResult MVKPresentableSwapchainImage::presentCAMetalDrawable(id<MTLCommandBuffer> mtlCmdBuff,
+ 															  MVKImagePresentInfo presentInfo) {
++	// Kestrel: a present queued just before its swapchain was destroyed has nothing to show.
++	if ( !_swapchain ) { return VK_ERROR_OUT_OF_DATE_KHR; }
+ 	_swapchain->renderWatermark(getMTLTexture(0), mtlCmdBuff);
+ 
+ 	// According to Apple, it is more performant to call MTLDrawable present from within a
+@@ -1728,7 +1731,10 @@ static void signalAndUntrack(const MVKSwapchainSignaler& signaler) {
+ // Ensure this image and the swapchain are not destroyed while awaiting presentation
+ void MVKPresentableSwapchainImage::beginPresentation(const MVKImagePresentInfo& presentInfo) {
+ 	retain();
+-	_swapchain->beginPresentation(presentInfo);
++	// Kestrel: the swapchain may have been destroyed (and detached from its images)
++	// between queueing this present and Metal scheduling it, e.g. when the window
++	// resizes. The completion handler already checks; this scheduled path didn't.
++	if (_swapchain) { _swapchain->beginPresentation(presentInfo); }
+ 	_beginPresentTime = mvkGetRuntimeNanoseconds();
+ 	_presentationStartTime = getPerformanceTimestamp();
+ }

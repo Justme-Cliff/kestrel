@@ -1,0 +1,305 @@
+diff --git a/common/base/Thread_pthread.cpp b/common/base/Thread_pthread.cpp
+index 26d5a31a4..818f54183 100644
+--- a/common/base/Thread_pthread.cpp
++++ b/common/base/Thread_pthread.cpp
+@@ -13,6 +13,9 @@
+ // limitations under the License.
+ 
+ #include "gfxstream/threads/Thread.h"
++#if defined(__APPLE__)
++#include <pthread/qos.h>
++#endif
+ 
+ #include <cerrno>
+ 
+@@ -133,6 +136,11 @@ void* Thread::thread_main(void* arg) {
+     intptr_t ret;
+ 
+     {
++#if defined(__APPLE__)
++        // Kestrel: guest GPU commands decode here; frames wait on it. Run on
++        // performance cores like the vCPUs.
++        pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
++#endif
+         Thread* self = reinterpret_cast<Thread*>(arg);
+         if ((self->mFlags & ThreadFlags::MaskSignals) != ThreadFlags::NoFlags) {
+             Thread::maskAllSignals();
+diff --git a/common/base/include/gfxstream/threads/WorkerThread.h b/common/base/include/gfxstream/threads/WorkerThread.h
+index 2d410adfa..66c838a98 100644
+--- a/common/base/include/gfxstream/threads/WorkerThread.h
++++ b/common/base/include/gfxstream/threads/WorkerThread.h
+@@ -20,6 +20,9 @@
+ #include <mutex>
+ #include <optional>
+ #include <thread>
++#if defined(__APPLE__)
++#include <pthread/qos.h>
++#endif
+ #include <utility>
+ #include <vector>
+ 
+@@ -87,7 +90,13 @@ class WorkerThread {
+     bool start() {
+         std::lock_guard<std::mutex> lock(mThreadMutex);
+         if (!mThread) {
+-            mThread.emplace([this]() { ThreadLoop(); });
++            mThread.emplace([this]() {
++#if defined(__APPLE__)
++                // Kestrel: post/sync workers present frames; keep them on performance cores.
++                pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
++#endif
++                ThreadLoop();
++            });
+         }
+         return true;
+     }
+diff --git a/host/gl/glestranslator/gles_cm/gles_cm_imp.cpp b/host/gl/glestranslator/gles_cm/gles_cm_imp.cpp
+index 887e64549..7e09116be 100644
+--- a/host/gl/glestranslator/gles_cm/gles_cm_imp.cpp
++++ b/host/gl/glestranslator/gles_cm/gles_cm_imp.cpp
+@@ -2231,7 +2231,9 @@ GL_API void GL_APIENTRY glEGLImageTargetTexture2DOES(GLenum target, GLeglImageOE
+                     SaveableTexturePtr(img->saveableTexture));
+             if (img->sync) {
+                 // insert gpu side fence to make sure we are done with any blit ops.
+-                ctx->dispatcher().glWaitSync(img->sync, 0, GL_TIMEOUT_IGNORED);
++                // Kestrel: CPU wait with a cap, not a GPU-side wait. On ANGLE Metal a GPU wait
++                // queued before its signal stalls the shared Metal queue forever.
++                ctx->dispatcher().glClientWaitSync(img->sync, GL_SYNC_FLUSH_COMMANDS_BIT, 100000000ull);
+             }
+         }
+     }
+diff --git a/host/gl/glestranslator/gles_v2/gles_v2_imp.cpp b/host/gl/glestranslator/gles_v2/gles_v2_imp.cpp
+index b22bf1a98..69b31efe3 100644
+--- a/host/gl/glestranslator/gles_v2/gles_v2_imp.cpp
++++ b/host/gl/glestranslator/gles_v2/gles_v2_imp.cpp
+@@ -4264,7 +4264,9 @@ GL_APICALL void GL_APIENTRY glEGLImageTargetTexture2DOES(GLenum target, GLeglIma
+                 texData->sourceEGLImage = imagehndl;
+                 if (img->sync) {
+                     // insert gpu side fence to make sure we are done with any blit ops.
+-                    ctx->dispatcher().glWaitSync(img->sync, 0, GL_TIMEOUT_IGNORED);
++                    // Kestrel: CPU wait with a cap, not a GPU-side wait. On ANGLE Metal a GPU wait
++                    // queued before its signal stalls the shared Metal queue forever.
++                    ctx->dispatcher().glClientWaitSync(img->sync, GL_SYNC_FLUSH_COMMANDS_BIT, 100000000ull);
+                 }
+                 if (!imagehndl) {
+                     fprintf(stderr, "glEGLImageTargetTexture2DOES with empty handle\n");
+@@ -4302,7 +4304,9 @@ GL_APICALL void GL_APIENTRY glEGLImageTargetTexture2DOES(GLenum target, GLeglIma
+                     SaveableTexturePtr(img->saveableTexture));
+             if (img->sync) {
+                 // insert gpu side fence to make sure we are done with any blit ops.
+-                ctx->dispatcher().glWaitSync(img->sync, 0, GL_TIMEOUT_IGNORED);
++                // Kestrel: CPU wait with a cap, not a GPU-side wait. On ANGLE Metal a GPU wait
++                // queued before its signal stalls the shared Metal queue forever.
++                ctx->dispatcher().glClientWaitSync(img->sync, GL_SYNC_FLUSH_COMMANDS_BIT, 100000000ull);
+             }
+             if (!imagehndl) {
+                 fprintf(stderr, "glEGLImageTargetTexture2DOES with empty handle\n");
+diff --git a/host/gl/glestranslator/gles_v2/gles_v30_imp.cpp b/host/gl/glestranslator/gles_v2/gles_v30_imp.cpp
+index 5d4cb8545..51c68313d 100644
+--- a/host/gl/glestranslator/gles_v2/gles_v30_imp.cpp
++++ b/host/gl/glestranslator/gles_v2/gles_v30_imp.cpp
+@@ -485,7 +485,9 @@ static void internal_glWaitSync(GLsync wait_on, GLbitfield flags, GLuint64 timeo
+     if (!ctx->dispatcher().glFenceSync) {
+         return;
+     }
+-    ctx->dispatcher().glWaitSync(wait_on, flags, timeout);
++    // Kestrel: CPU wait with a cap, not a GPU-side wait. On ANGLE Metal a GPU wait
++    // queued before its signal stalls the shared Metal queue forever.
++    ctx->dispatcher().glClientWaitSync(wait_on, GL_SYNC_FLUSH_COMMANDS_BIT, 100000000ull);
+ }
+ 
+ static void internal_glDeleteSync(GLsync to_delete) {
+diff --git a/host/include/gfxstream/virtio-gpu-gfxstream-renderer-unstable.h b/host/include/gfxstream/virtio-gpu-gfxstream-renderer-unstable.h
+index 5f5eae0a7..956e19911 100644
+--- a/host/include/gfxstream/virtio-gpu-gfxstream-renderer-unstable.h
++++ b/host/include/gfxstream/virtio-gpu-gfxstream-renderer-unstable.h
+@@ -61,6 +61,11 @@ VG_EXPORT void gfxstream_backend_setup_window(void* native_window_handle, int32_
+ 
+ VG_EXPORT void stream_renderer_flush(uint32_t res_handle);
+ 
++// Kestrel additions: present into a host window without reading frames back.
++VG_EXPORT int stream_renderer_kestrel_show_window(void* native_window, int x, int y, int w, int h,
++                                                  int fb_width, int fb_height, float dpr);
++VG_EXPORT void stream_renderer_kestrel_hide_window(void);
++
+ VG_EXPORT void* stream_renderer_platform_create_shared_egl_context(void);
+ VG_EXPORT int stream_renderer_platform_destroy_shared_egl_context(void*);
+ 
+diff --git a/host/library/shared_library.cpp b/host/library/shared_library.cpp
+index f8736fe56..3dbef6d55 100644
+--- a/host/library/shared_library.cpp
++++ b/host/library/shared_library.cpp
+@@ -185,6 +185,12 @@ SharedLibrary* SharedLibrary::do_open(const char* libraryName,
+             libraryName, libPath);
+         lib = dlopen(libPath, RTLD_NOW);
+     }
++    if (lib == NULL && !strchr(libraryName, '/')) {
++        // Kestrel: host OpenGL ES (ANGLE on Metal) ships in lib64/gles_angle next
++        // to the executable.
++        std::string bundled = std::string("@executable_path/lib64/gles_angle/") + libPath;
++        lib = dlopen(bundled.c_str(), RTLD_NOW);
++    }
+ #else
+     GFXSTREAM_VERBOSE("SharedLibrary::open for [%s] (posix,linux): call dlopen on [%s]", libraryName, libPath);
+     void* lib = nullptr;
+diff --git a/host/native_window/native_sub_window_cocoa.mm b/host/native_window/native_sub_window_cocoa.mm
+index 583d060c5..cddeca1e7 100644
+--- a/host/native_window/native_sub_window_cocoa.mm
++++ b/host/native_window/native_sub_window_cocoa.mm
+@@ -58,6 +58,11 @@ - (CAMetalLayer*)getMetalLayer {
+     // to CAMetalLayer because we configured the view to use it.
+     return (CAMetalLayer*)self.layer;
+ }
++
++// Kestrel: display only; mouse and keyboard go to the host app's views on top.
++- (NSView*)hitTest:(NSPoint)point {
++    return nil;
++}
+ @end
+ 
+ EGLNativeWindowType createSubWindow(FBNativeWindowType p_window, int x, int y, int width,
+@@ -98,7 +103,7 @@ EGLNativeWindowType createSubWindow(FBNativeWindowType p_window, int x, int y, i
+         [glView setWantsBestResolutionOpenGLSurface:YES];
+     }
+     [glView setWantsLayer:YES];
+-    [[win contentView] addSubview:glView];
++    [[win contentView] addSubview:glView positioned:NSWindowBelow relativeTo:nil];
+     [win makeKeyAndOrderFront:nil];
+     if (hideWindow) {
+         [glView setHidden:YES];
+@@ -129,18 +134,14 @@ int moveSubWindow(FBNativeWindowType p_parent_window, EGLNativeWindowType p_sub_
+         return 0;
+     }
+ 
+-    /* The view must be removed from the hierarchy to be properly resized */
+-    [glView removeFromSuperview];
+-
+     /* (x,y) assume an upper-left origin, but Cocoa uses a lower-left origin */
+     NSRect content_rect = [win contentRectForFrameRect:[win frame]];
+     int cocoa_y = (int)content_rect.size.height - (y + height);
+     NSRect newFrame = NSMakeRect(x, cocoa_y, width, height);
++    /* Kestrel: only move/resize it. Removing the Metal-backed view from the window
++       while the presenter thread renders into its CAMetalLayer crashes MoltenVK. */
+     [glView setFrame:newFrame];
+ 
+-    /* Re-add the sub-window to the view hierarchy */
+-    [[win contentView] addSubview:glView];
+-
+     return 1;
+ }
+ 
+diff --git a/host/virtio_gpu_gfxstream_renderer.cpp b/host/virtio_gpu_gfxstream_renderer.cpp
+index f974dad12..f0aee4ebf 100644
+--- a/host/virtio_gpu_gfxstream_renderer.cpp
++++ b/host/virtio_gpu_gfxstream_renderer.cpp
+@@ -177,6 +177,9 @@ GetGfxstreamFeatures(const int rendererFlags,
+ 
+ 
+ // TODO(b/418238945): Remove this AEMU specific code if possible.
++// Kestrel: the renderer, for presenting into a host window (see below).
++std::weak_ptr<Renderer> sKestrelRenderer;
++
+ void MaybeConfigureRenderer(gfxstream::RenderLib& rendererLibrary) {
+     if (const std::string& s_renderer = gfxstream::base::getEnvironmentVariable("ANDROID_EMU_RENDERER"); !s_renderer.empty()) {
+ 
+@@ -228,6 +231,7 @@ RendererPtr InitRenderer(uint32_t displayWidth,
+         GFXSTREAM_ERROR("Failed to initialize renderer.");
+         return nullptr;
+     }
++    sKestrelRenderer = renderer;
+ 
+     // Avoid holding an owning reference in order to not block renderer shutdown.
+     std::weak_ptr<Renderer> rendererWeak = renderer;
+@@ -443,6 +447,23 @@ VG_EXPORT int stream_renderer_resource_get_info(int res_handle,
+     return sFrontend()->getResourceInfo(res_handle, info);
+ }
+ 
++// Kestrel: present frames straight into `native_window` (an NSWindow on macOS),
++// in the rectangle x,y,w,h (points, top-left origin). Call again to move or resize.
++// After this, stream_renderer_flush(resource) shows a frame without any readback.
++VG_EXPORT int stream_renderer_kestrel_show_window(void* native_window, int x, int y, int w, int h,
++                                                  int fb_width, int fb_height, float dpr) {
++    auto renderer = sKestrelRenderer.lock();
++    if (!renderer) return -1;
++    return renderer->showOpenGLSubwindow(reinterpret_cast<FBNativeWindowType>(native_window), x, y, w,
++                                         h, fb_width, fb_height, dpr, 0.0f, false, false)
++               ? 0
++               : -1;
++}
++
++VG_EXPORT void stream_renderer_kestrel_hide_window() {
++    if (auto renderer = sKestrelRenderer.lock()) renderer->destroyOpenGLSubwindow();
++}
++
+ VG_EXPORT void stream_renderer_flush(uint32_t res_handle) {
+     GFXSTREAM_TRACE_EVENT(GFXSTREAM_TRACE_STREAM_RENDERER_CATEGORY, "stream_renderer_flush()");
+ 
+diff --git a/host/vulkan/display_vk.cpp b/host/vulkan/display_vk.cpp
+index 2a81785ff..df6497355 100644
+--- a/host/vulkan/display_vk.cpp
++++ b/host/vulkan/display_vk.cpp
+@@ -195,6 +195,10 @@ bool DisplayVk::recreateSwapchain() {
+ }
+ 
+ DisplayVk::PostResult DisplayVk::post(const Post& postCmd) {
++    // Kestrel: the window (main thread) binds, unbinds and resizes the surface under
++    // mMutex while this post thread uses the swapchain. Without the lock, a resize or
++    // close in the middle of a frame destroyed the swapchain under us (null deref).
++    std::lock_guard<std::mutex> surfaceLock(mMutex);
+     auto completedFuture = std::async(std::launch::deferred, [] {}).share();
+     completedFuture.wait();
+ 
+diff --git a/host/vulkan/swap_chain_state_vk.cpp b/host/vulkan/swap_chain_state_vk.cpp
+index 1cdab4cc8..f01330b25 100644
+--- a/host/vulkan/swap_chain_state_vk.cpp
++++ b/host/vulkan/swap_chain_state_vk.cpp
+@@ -12,6 +12,7 @@
+ // See the License for the specific language governing permissions and
+ // limitations under the License.
+ 
++#include <cstdlib>
+ #include "swap_chain_state_vk.h"
+ 
+ #include <vulkan/vk_enum_string_helper.h>
+@@ -294,6 +295,18 @@ std::optional<SwapchainCreateInfoWrapper> SwapChainStateVk::createSwapChainCi(
+         GFXSTREAM_ERROR("Failed to create swapchain: FIFO present mode not supported.");
+         return std::nullopt;
+     }
++    // Kestrel: games feel laggy with frames queued behind vsync. MAILBOX shows the
++    // newest frame at the next vsync without tearing.
++    if (presentModes.count(VK_PRESENT_MODE_MAILBOX_KHR)) presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
++    // MoltenVK has no MAILBOX. IMMEDIATE turns off the CAMetalLayer's display sync:
++    // in a window, macOS's compositor still shows whole frames (the newest one), so it
++    // acts like MAILBOX and saves up to a frame of lag. The app opts in.
++    else if (presentModes.count(VK_PRESENT_MODE_IMMEDIATE_KHR) && getenv("KESTREL_LOW_LATENCY_PRESENT")) {
++        presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
++    }
++    GFXSTREAM_INFO("Kestrel: swapchain present mode %s",
++                   presentMode == VK_PRESENT_MODE_FIFO_KHR ? "FIFO (vsync queue)"
++                   : presentMode == VK_PRESENT_MODE_MAILBOX_KHR ? "MAILBOX" : "IMMEDIATE (newest frame)");
+     VkFormatProperties formatProperties = {};
+     vk.vkGetPhysicalDeviceFormatProperties(physicalDevice, k_vkFormat, &formatProperties);
+     // According to the spec, a presentable image is equivalent to a non-presentable image created
+@@ -338,7 +351,9 @@ std::optional<SwapchainCreateInfoWrapper> SwapChainStateVk::createSwapChainCi(
+         return std::nullopt;
+     }
+     auto extent = maybeExtent.value();
+-    uint32_t imageCount = surfaceCaps.minImageCount + 1;
++    // Kestrel: as few images as allowed: every extra queued image is a frame of lag.
++    uint32_t imageCount = presentMode != VK_PRESENT_MODE_FIFO_KHR ? std::max(surfaceCaps.minImageCount, 3u)
++                                                                     : std::max(surfaceCaps.minImageCount, 2u);
+     if (surfaceCaps.maxImageCount != 0 && surfaceCaps.maxImageCount < imageCount) {
+         imageCount = surfaceCaps.maxImageCount;
+     }
+diff --git a/host/vulkan/vk_decoder_global_state.cpp b/host/vulkan/vk_decoder_global_state.cpp
+index fb37464df..dfbfbb390 100644
+--- a/host/vulkan/vk_decoder_global_state.cpp
++++ b/host/vulkan/vk_decoder_global_state.cpp
+@@ -5289,6 +5289,7 @@ class VkDecoderGlobalState::Impl {
+         VkResult result = deviceDispatch->vkCreateGraphicsPipelines(
+             device, pipelineCache, createInfoCount, pCreateInfos, nullptr, pPipelines);
+         if (result != VK_SUCCESS && result != VK_PIPELINE_COMPILE_REQUIRED) {
++            GFXSTREAM_ERROR("vkCreateGraphicsPipelines failed: %d (count %u)", result, createInfoCount);
+             return result;
+         }
+ 
